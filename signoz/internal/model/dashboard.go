@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/utils"
@@ -25,6 +26,54 @@ type Dashboard struct {
 	Variables               map[string]interface{}   `json:"variables"`
 	Version                 string                   `json:"version,omitempty"`
 	Widgets                 []map[string]interface{} `json:"widgets"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for Dashboard
+func (d *Dashboard) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct to unmarshal the JSON
+	type DashboardAlias Dashboard
+	aux := &struct {
+		*DashboardAlias
+		Widgets interface{} `json:"widgets"`
+	}{
+		DashboardAlias: (*DashboardAlias)(d),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Handle widgets field - it might be a string or an array
+	if aux.Widgets != nil {
+		switch v := aux.Widgets.(type) {
+		case string:
+			// If widgets is a string, try to unmarshal it as JSON
+			if v != "" {
+				var widgets []map[string]interface{}
+				if err := json.Unmarshal([]byte(v), &widgets); err != nil {
+					return fmt.Errorf("failed to unmarshal widgets string: %w", err)
+				}
+				d.Widgets = widgets
+			} else {
+				d.Widgets = []map[string]interface{}{}
+			}
+		case []interface{}:
+			// If widgets is already an array, convert it to the expected type
+			widgets := make([]map[string]interface{}, len(v))
+			for i, item := range v {
+				if widgetMap, ok := item.(map[string]interface{}); ok {
+					widgets[i] = widgetMap
+				} else {
+					return fmt.Errorf("widget item %d is not a map", i)
+				}
+			}
+			d.Widgets = widgets
+		default:
+			return fmt.Errorf("unexpected type for widgets: %T", v)
+		}
+	}
+
+	return nil
 }
 
 func (d Dashboard) PanelMapToTerraform() (types.String, error) {
