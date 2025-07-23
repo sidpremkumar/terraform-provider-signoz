@@ -70,13 +70,25 @@ func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 		return types.StringValue("[]"), nil
 	}
 
-	// Marshal the widgets to JSON
+	// First marshal to get the data
 	b, err := json.Marshal(d.Widgets)
 	if err != nil {
 		return types.StringValue(""), err
 	}
 
-	return types.StringValue(string(b)), nil
+	// Parse it back to normalize the structure
+	var normalized interface{}
+	if err := json.Unmarshal(b, &normalized); err != nil {
+		return types.StringValue(""), err
+	}
+
+	// Marshal with exact formatting to match API
+	formatted, err := json.MarshalIndent(normalized, "", "  ")
+	if err != nil {
+		return types.StringValue(""), err
+	}
+
+	return types.StringValue(string(formatted)), nil
 }
 
 func (d *Dashboard) SetVariables(tfVariables types.String) error {
