@@ -114,7 +114,7 @@ func (d Dashboard) LayoutToTerraform() (types.String, error) {
 }
 
 func (d Dashboard) WidgetsToTerraform() (types.String, error) {
-	b, err := json.Marshal(d.Widgets)
+	b, err := json.MarshalIndent(d.Widgets, "", "  ")
 	if err != nil {
 		return types.StringValue(""), err
 	}
@@ -162,10 +162,17 @@ func (d *Dashboard) SetLayout(tfLayout types.String) error {
 
 func (d *Dashboard) SetWidgets(tfWidgets types.String) error {
 	var widgets []map[string]interface{}
-	err := json.Unmarshal([]byte(tfWidgets.ValueString()), &widgets)
-	if err != nil {
-		return err
+
+	// Check if the input is already a JSON string that needs parsing
+	widgetsStr := tfWidgets.ValueString()
+	if widgetsStr != "" {
+		// Try to parse as JSON first
+		if err := json.Unmarshal([]byte(widgetsStr), &widgets); err != nil {
+			// If it's not valid JSON, return the error
+			return fmt.Errorf("failed to parse widgets JSON: %w", err)
+		}
 	}
+
 	d.Widgets = widgets
 	return nil
 }
