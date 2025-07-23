@@ -82,8 +82,8 @@ func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 		return types.StringValue(""), err
 	}
 
-	// Marshal with exact formatting to match API
-	formatted, err := json.MarshalIndent(normalized, "", "  ")
+	// Marshal with 6-space indentation to match API exactly
+	formatted, err := json.MarshalIndent(normalized, "", "      ")
 	if err != nil {
 		return types.StringValue(""), err
 	}
