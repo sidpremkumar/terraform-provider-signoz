@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -67,28 +69,20 @@ func (d Dashboard) LayoutToTerraform() (types.String, error) {
 
 func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 	if d.Widgets == nil {
-		return types.StringValue("[]"), nil
+		return types.StringValue(""), nil
 	}
 
-	// First marshal to get the data
+	// Marshal the widgets to JSON
 	b, err := json.Marshal(d.Widgets)
 	if err != nil {
 		return types.StringValue(""), err
 	}
 
-	// Parse it back to normalize the structure
-	var normalized interface{}
-	if err := json.Unmarshal(b, &normalized); err != nil {
-		return types.StringValue(""), err
-	}
+	// Create a hash of the JSON content to avoid formatting comparison issues
+	hash := sha256.Sum256(b)
+	hashString := hex.EncodeToString(hash[:])
 
-	// Marshal with 6-space indentation to match API exactly
-	formatted, err := json.MarshalIndent(normalized, "", "      ")
-	if err != nil {
-		return types.StringValue(""), err
-	}
-
-	return types.StringValue(string(formatted)), nil
+	return types.StringValue(hashString), nil
 }
 
 func (d *Dashboard) SetVariables(tfVariables types.String) error {
@@ -132,6 +126,7 @@ func (d *Dashboard) SetLayout(tfLayout types.String) error {
 
 func (d *Dashboard) SetWidgets(tfWidgets types.String) error {
 	widgetsStr := tfWidgets.ValueString()
+
 	if widgetsStr == "" {
 		d.Widgets = []map[string]interface{}{}
 		return nil
