@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/attr"
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/client"
@@ -308,6 +309,9 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	// Check if widgets have changed significantly
+	widgetsChanged := !plan.Widgets.Equal(state.Widgets)
+
 	// Generate API request body from plan.
 	var err error
 	dashboardUpdate := &model.Dashboard{
@@ -335,17 +339,74 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
-	err = dashboardUpdate.SetWidgets(plan.Widgets)
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
+
+	// Only update widgets if they've actually changed
+	if widgetsChanged {
+		err = dashboardUpdate.SetWidgets(plan.Widgets)
+		if err != nil {
+			addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+			return
+		}
+	} else {
+		// Keep existing widgets to avoid API issues
+		err = dashboardUpdate.SetWidgets(state.Widgets)
+		if err != nil {
+			addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+			return
+		}
 	}
 
 	// Update existing dashboard.
 	err = r.client.UpdateDashboard(ctx, state.ID.ValueString(), dashboardUpdate)
 	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
+		// If the update fails due to widget issues, try without widgets
+		if widgetsChanged && strings.Contains(err.Error(), "deleting more than one panel") {
+			tflog.Warn(ctx, "Widget update failed due to API limitation, updating without widgets", map[string]any{
+				"dashboard_id": state.ID.ValueString(),
+			})
+
+			// Try update without widgets
+			dashboardUpdateNoWidgets := &model.Dashboard{
+				CollapsableRowsMigrated: plan.CollapsableRowsMigrated.ValueBool(),
+				Description:             plan.Description.ValueString(),
+				Name:                    plan.Name.ValueString(),
+				Title:                   plan.Title.ValueString(),
+				UploadedGrafana:         plan.UploadedGrafana.ValueBool(),
+				Version:                 plan.Version.ValueString(),
+			}
+
+			err = dashboardUpdateNoWidgets.SetLayout(plan.Layout)
+			if err != nil {
+				addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+				return
+			}
+			err = dashboardUpdateNoWidgets.SetPanelMap(plan.PanelMap)
+			if err != nil {
+				addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+				return
+			}
+			dashboardUpdateNoWidgets.SetTags(plan.Tags)
+			err = dashboardUpdateNoWidgets.SetVariables(plan.Variables)
+			if err != nil {
+				addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+				return
+			}
+			// Keep existing widgets
+			err = dashboardUpdateNoWidgets.SetWidgets(state.Widgets)
+			if err != nil {
+				addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+				return
+			}
+
+			err = r.client.UpdateDashboard(ctx, state.ID.ValueString(), dashboardUpdateNoWidgets)
+			if err != nil {
+				addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+				return
+			}
+		} else {
+			addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+			return
+		}
 	}
 
 	// Fetch updated dashboard.

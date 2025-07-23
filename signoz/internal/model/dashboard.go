@@ -1,9 +1,8 @@
 package model
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/utils"
@@ -68,25 +67,28 @@ func (d Dashboard) LayoutToTerraform() (types.String, error) {
 
 func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 	if d.Widgets == nil {
-		return types.StringValue(""), nil
+		return types.StringValue("[]"), nil
 	}
 
-	// If d.Widgets is already a string (hash from SetWidgets), return it directly
-	if widgetsStr, ok := d.Widgets.(string); ok {
-		return types.StringValue(widgetsStr), nil
-	}
-
-	// Otherwise, it's from the API response and needs to be hashed
+	// Marshal the widgets to JSON
 	b, err := json.Marshal(d.Widgets)
 	if err != nil {
 		return types.StringValue(""), err
 	}
 
-	// Create a hash of the JSON content to avoid formatting comparison issues
-	hash := sha256.Sum256(b)
-	hashString := hex.EncodeToString(hash[:])
+	// Parse it back to normalize the structure and ensure consistent formatting
+	var normalized []map[string]interface{}
+	if err := json.Unmarshal(b, &normalized); err != nil {
+		return types.StringValue(""), err
+	}
 
-	return types.StringValue(hashString), nil
+	// Marshal with consistent formatting
+	normalizedJSON, err := json.Marshal(normalized)
+	if err != nil {
+		return types.StringValue(""), err
+	}
+
+	return types.StringValue(string(normalizedJSON)), nil
 }
 
 func (d *Dashboard) SetVariables(tfVariables types.String) error {
@@ -131,15 +133,17 @@ func (d *Dashboard) SetLayout(tfLayout types.String) error {
 func (d *Dashboard) SetWidgets(tfWidgets types.String) error {
 	widgetsStr := tfWidgets.ValueString()
 	if widgetsStr == "" {
-		d.Widgets = ""
+		d.Widgets = []map[string]interface{}{}
 		return nil
 	}
 
-	// Hash the input JSON to make it comparable with the output hash
-	hash := sha256.Sum256([]byte(widgetsStr))
-	hashString := hex.EncodeToString(hash[:])
+	// Parse the JSON string into a slice of maps
+	var widgets []map[string]interface{}
+	if err := json.Unmarshal([]byte(widgetsStr), &widgets); err != nil {
+		return fmt.Errorf("failed to parse widgets JSON: %w", err)
+	}
 
-	d.Widgets = hashString
+	d.Widgets = widgets
 	return nil
 }
 
