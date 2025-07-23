@@ -238,6 +238,14 @@ func (r *dashboardResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
+	// Check if refresh is disabled
+	if r.client.DisableRefresh() {
+		tflog.Debug(ctx, "Skipping dashboard refresh due to disable_refresh setting")
+		// Just return the current state without refreshing
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		return
+	}
+
 	tflog.Debug(ctx, "Reading dashboard", map[string]any{"dashboard": state.ID.ValueString()})
 
 	// Get refreshed dashboard from SigNoz.

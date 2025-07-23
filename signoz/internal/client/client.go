@@ -25,15 +25,16 @@ const (
 
 // Client - SigNoz API client.
 type Client struct {
-	agent      string
-	token      string
-	version    string
-	hostURL    *url.URL
-	httpClient *httpclient.Client
+	agent          string
+	token          string
+	version        string
+	hostURL        *url.URL
+	httpClient     *httpclient.Client
+	disableRefresh bool
 }
 
 // NewClient - Creates a new client.
-func NewClient(endpoint, token string, httpTimeout time.Duration, httpRetryMax int, agent, version string) (*Client, error) {
+func NewClient(endpoint, token string, httpTimeout time.Duration, httpRetryMax int, agent, version string, disableRefresh bool) (*Client, error) {
 	host, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
@@ -58,11 +59,12 @@ func NewClient(endpoint, token string, httpTimeout time.Duration, httpRetryMax i
 	)
 
 	return &Client{
-		agent:      agent,
-		token:      token,
-		version:    version,
-		hostURL:    host,
-		httpClient: client,
+		agent:          agent,
+		token:          token,
+		version:        version,
+		hostURL:        host,
+		httpClient:     client,
+		disableRefresh: disableRefresh,
 	}, nil
 }
 
@@ -92,4 +94,9 @@ func (c *Client) doRequest(ctx context.Context, req *http.Request) ([]byte, erro
 	}
 
 	return body, nil
+}
+
+// DisableRefresh returns whether refresh operations should be disabled
+func (c *Client) DisableRefresh() bool {
+	return c.disableRefresh
 }

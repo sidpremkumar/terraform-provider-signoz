@@ -3,13 +3,11 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/utils"
 	tfattr "github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/structure"
 )
 
 // Dashboard model.
@@ -32,21 +30,24 @@ func (d Dashboard) PanelMapToTerraform() (types.String, error) {
 	if d.PanelMap == nil {
 		return types.StringNull(), nil
 	}
-	panelMap, err := structure.FlattenJsonToString(d.PanelMap)
+
+	// Use json.Marshal for consistent formatting instead of structure.FlattenJsonToString
+	panelMapJSON, err := json.Marshal(d.PanelMap)
 	if err != nil {
 		return types.StringNull(), err
 	}
 
-	return types.StringValue(panelMap), nil
+	return types.StringValue(string(panelMapJSON)), nil
 }
 
 func (d Dashboard) VariablesToTerraform() (types.String, error) {
-	variables, err := structure.FlattenJsonToString(d.Variables)
+	// Use json.Marshal for consistent formatting instead of structure.FlattenJsonToString
+	variablesJSON, err := json.Marshal(d.Variables)
 	if err != nil {
-		return types.StringValue(""), err
+		return types.StringValue("{}"), err
 	}
 
-	return types.StringValue(variables), nil
+	return types.StringValue(string(variablesJSON)), nil
 }
 
 func (d Dashboard) TagsToTerraform() (types.List, diag.Diagnostics) {
@@ -70,30 +71,26 @@ func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 		return types.StringValue("[]"), nil
 	}
 
-	// Marshal the widgets to JSON
+	// Use json.Marshal directly without additional normalization
+	// This ensures consistency with what was sent during creation
 	b, err := json.Marshal(d.Widgets)
 	if err != nil {
-		return types.StringValue(""), err
+		return types.StringValue("[]"), err
 	}
 
-	// Parse it back to normalize the structure and ensure consistent formatting
-	var normalized []map[string]interface{}
-	if err := json.Unmarshal(b, &normalized); err != nil {
-		return types.StringValue(""), err
-	}
-
-	// Marshal with consistent formatting
-	normalizedJSON, err := json.Marshal(normalized)
-	if err != nil {
-		return types.StringValue(""), err
-	}
-
-	return types.StringValue(string(normalizedJSON)), nil
+	return types.StringValue(string(b)), nil
 }
 
 func (d *Dashboard) SetVariables(tfVariables types.String) error {
-	variables, err := structure.ExpandJsonFromString(tfVariables.ValueString())
-	if err != nil {
+	variablesStr := tfVariables.ValueString()
+	if variablesStr == "" {
+		d.Variables = make(map[string]interface{})
+		return nil
+	}
+
+	// Use json.Unmarshal for consistent parsing instead of structure.ExpandJsonFromString
+	var variables map[string]interface{}
+	if err := json.Unmarshal([]byte(variablesStr), &variables); err != nil {
 		return err
 	}
 	d.Variables = variables
@@ -101,12 +98,15 @@ func (d *Dashboard) SetVariables(tfVariables types.String) error {
 }
 
 func (d *Dashboard) SetPanelMap(tfPanelMap types.String) error {
-	if tfPanelMap.ValueString() == "" {
+	panelMapStr := tfPanelMap.ValueString()
+	if panelMapStr == "" {
 		d.PanelMap = make(map[string]interface{})
 		return nil
 	}
-	panelMap, err := structure.ExpandJsonFromString(tfPanelMap.ValueString())
-	if err != nil {
+
+	// Use json.Unmarshal for consistent parsing instead of structure.ExpandJsonFromString
+	var panelMap map[string]interface{}
+	if err := json.Unmarshal([]byte(panelMapStr), &panelMap); err != nil {
 		return err
 	}
 	d.PanelMap = panelMap
@@ -115,7 +115,9 @@ func (d *Dashboard) SetPanelMap(tfPanelMap types.String) error {
 
 func (d *Dashboard) SetTags(tfTags types.List) {
 	tags := utils.Map(tfTags.Elements(), func(value tfattr.Value) string {
-		return strings.Trim(value.String(), "\"")
+		// Use ValueString() directly instead of trimming quotes
+		// This ensures consistency with how the data is stored and retrieved
+		return value.(types.String).ValueString()
 	})
 	d.Tags = tags
 }

@@ -27,18 +27,20 @@ const (
 	DefaultURL          = "http://localhost:3301"
 
 	// Environment variables.
-	EnvAccessToken  = "SIGNOZ_ACCESS_TOKEN" // #nosec G101
-	EnvEndpoint     = "SIGNOZ_ENDPOINT"
-	EnvHTTPMaxRetry = "SIGNOZ_HTTP_MAX_RETRY"
-	EnvHTTPTimeout  = "SIGNOZ_HTTP_TIMEOUT"
+	EnvAccessToken    = "SIGNOZ_ACCESS_TOKEN" // #nosec G101
+	EnvEndpoint       = "SIGNOZ_ENDPOINT"
+	EnvHTTPMaxRetry   = "SIGNOZ_HTTP_MAX_RETRY"
+	EnvHTTPTimeout    = "SIGNOZ_HTTP_TIMEOUT"
+	EnvDisableRefresh = "SIGNOZ_DISABLE_REFRESH"
 )
 
 // signozProviderModel maps provider schema data to a Go type.
 type signozProviderModel struct {
-	AccessToken  types.String `tfsdk:"access_token"`
-	Endpoint     types.String `tfsdk:"endpoint"`
-	HTTPMaxRetry types.Int64  `tfsdk:"http_max_retry"`
-	HTTPTimeout  types.Int64  `tfsdk:"http_timeout"`
+	AccessToken    types.String `tfsdk:"access_token"`
+	Endpoint       types.String `tfsdk:"endpoint"`
+	HTTPMaxRetry   types.Int64  `tfsdk:"http_max_retry"`
+	HTTPTimeout    types.Int64  `tfsdk:"http_timeout"`
+	DisableRefresh types.Bool   `tfsdk:"disable_refresh"`
 }
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -99,6 +101,12 @@ func (p *signozProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 				Description: fmt.Sprintf("Specifies the timeout limit in seconds for the HTTP requests made to SigNoz.\n"+
 					"Also, you can set it using environment variable %s. If not set, it defaults to %d.", EnvHTTPTimeout, DefaultHTTPTimeout),
 			},
+			"disable_refresh": schema.BoolAttribute{
+				Optional: true,
+				Description: "If set to true, disables post-apply refresh checks to avoid 'inconsistent result' warnings.\n" +
+					"This is useful when you trust the apply operation but want to avoid JSON formatting inconsistencies.\n" +
+					"Also, you can set it using environment variable " + EnvDisableRefresh + ".",
+			},
 		},
 	}
 }
@@ -120,6 +128,14 @@ func (p *signozProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	endpoint := overrideStrWithConfig(config.Endpoint, os.Getenv(EnvEndpoint), DefaultURL)
 	httpMaxRetry := overrideIntWithConfig(config.HTTPMaxRetry, mustGetInt(os.Getenv(EnvHTTPMaxRetry)), DefaultHTTPMaxRetry)
 	httpTimeout := overrideIntWithConfig(config.HTTPTimeout, mustGetInt(os.Getenv(EnvHTTPTimeout)), DefaultHTTPTimeout)
+
+	// Handle disable_refresh from config or environment variable
+	disableRefresh := config.DisableRefresh.ValueBool()
+	if !config.DisableRefresh.IsNull() {
+		disableRefresh = config.DisableRefresh.ValueBool()
+	} else if os.Getenv(EnvDisableRefresh) == "true" {
+		disableRefresh = true
+	}
 
 	// Check if the SigNoz access token has been set in the configuration or
 	// environment variables. If not, return an error.
@@ -143,6 +159,7 @@ func (p *signozProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		httpMaxRetry,
 		p.terraformAgent,
 		p.version,
+		disableRefresh,
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create SigNoz API client", err.Error())

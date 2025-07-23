@@ -291,11 +291,18 @@ func (r *alertResource) Create(ctx context.Context, req resource.CreateRequest, 
 
 // Read refreshes the Terraform state with the latest data.
 func (r *alertResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// Get current state
 	var state alertResourceModel
 	var diag diag.Diagnostics
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Check if refresh is disabled
+	if r.client.DisableRefresh() {
+		tflog.Debug(ctx, "Skipping alert refresh due to disable_refresh setting")
+		// Just return the current state without refreshing
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 		return
 	}
 

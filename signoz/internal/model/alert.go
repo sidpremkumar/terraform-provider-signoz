@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/attr"
@@ -8,7 +9,6 @@ import (
 	tfattr "github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/structure"
 )
 
 const (
@@ -83,12 +83,13 @@ func (a Alert) GetType() string {
 }
 
 func (a Alert) ConditionToTerraform() (types.String, error) {
-	condition, err := structure.FlattenJsonToString(a.Condition)
+	// Use json.Marshal for consistent formatting instead of structure.FlattenJsonToString
+	conditionJSON, err := json.Marshal(a.Condition)
 	if err != nil {
-		return types.StringValue(""), err
+		return types.StringValue("{}"), err
 	}
 
-	return types.StringValue(condition), nil
+	return types.StringValue(string(conditionJSON)), nil
 }
 
 func (a Alert) LabelsToTerraform() (types.Map, diag.Diagnostics) {
@@ -139,8 +140,15 @@ func (a Alert) ToTerraform() interface{} {
 }
 
 func (a *Alert) SetCondition(tfCondition types.String) error {
-	condition, err := structure.ExpandJsonFromString(tfCondition.ValueString())
-	if err != nil {
+	conditionStr := tfCondition.ValueString()
+	if conditionStr == "" {
+		a.Condition = make(map[string]interface{})
+		return nil
+	}
+
+	// Use json.Unmarshal for consistent parsing instead of structure.ExpandJsonFromString
+	var condition map[string]interface{}
+	if err := json.Unmarshal([]byte(conditionStr), &condition); err != nil {
 		return err
 	}
 
@@ -152,7 +160,9 @@ func (a *Alert) SetLabels(tfLabels types.Map, tfSeverity types.String) {
 	labels := make(map[string]string)
 
 	for key, value := range tfLabels.Elements() {
-		labels[key] = strings.Trim(value.String(), "\"")
+		// Use ValueString() directly instead of trimming quotes
+		// This ensures consistency with how the data is stored and retrieved
+		labels[key] = value.(types.String).ValueString()
 	}
 
 	terraformLabel := strings.Split(AlertTerraformLabel, ":")
@@ -167,7 +177,9 @@ func (a *Alert) SetLabels(tfLabels types.Map, tfSeverity types.String) {
 
 func (a *Alert) SetPreferredChannels(tfPreferredChannels types.List) {
 	preferredChannels := utils.Map(tfPreferredChannels.Elements(), func(value tfattr.Value) string {
-		return strings.Trim(value.String(), "\"")
+		// Use ValueString() directly instead of trimming quotes
+		// This ensures consistency with how the data is stored and retrieved
+		return value.(types.String).ValueString()
 	})
 	a.PreferredChannels = preferredChannels
 }
