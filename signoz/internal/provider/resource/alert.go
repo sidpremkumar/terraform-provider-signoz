@@ -350,7 +350,6 @@ func (r *alertResource) Read(ctx context.Context, req resource.ReadRequest, resp
 func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Retrieve values from plan.
 	var plan, state alertResourceModel
-	var diag diag.Diagnostics
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -400,44 +399,18 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	// Fetch updated alert.
-	alert, err := r.client.GetAlert(ctx, state.ID.ValueString())
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozAlert)
-		return
-	}
+	// Instead of fetching fresh state (which causes timestamp inconsistencies),
+	// we'll use the plan data and preserve the original timestamps from state.
+	// This avoids the "inconsistent result" error while maintaining data integrity.
 
-	// Overwrite items with refreshed state.
-	plan.ID = types.StringValue(alert.ID)
-	plan.Alert = types.StringValue(alert.Alert)
-	plan.AlertType = types.StringValue(alert.AlertType)
-	plan.BroadcastToAll = types.BoolValue(alert.BroadcastToAll)
-	plan.Description = types.StringValue(alert.Annotations.Description)
-	plan.Disabled = types.BoolValue(alert.Disabled)
-	plan.EvalWindow = types.StringValue(alert.EvalWindow)
-	plan.Frequency = types.StringValue(alert.Frequency)
-	plan.RuleType = types.StringValue(alert.RuleType)
-	plan.Severity = types.StringValue(alert.Labels[attr.Severity])
-	plan.Source = types.StringValue(alert.Source)
-	plan.State = types.StringValue(alert.State)
-	plan.Summary = types.StringValue(alert.Annotations.Summary)
-	plan.Version = types.StringValue(alert.Version)
-	plan.CreateAt = types.StringValue(alert.CreateAt)
-	plan.CreateBy = types.StringValue(alert.CreateBy)
-	plan.UpdateAt = types.StringValue(alert.UpdateAt)
-	plan.UpdateBy = types.StringValue(alert.UpdateBy)
-
-	plan.Condition, err = alert.ConditionToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozAlert)
-		return
-	}
-
-	plan.Labels, diag = alert.LabelsToTerraform()
-	resp.Diagnostics.Append(diag...)
-
-	plan.PreferredChannels, diag = alert.PreferredChannelsToTerraform()
-	resp.Diagnostics.Append(diag...)
+	// Preserve server-managed fields from current state
+	plan.ID = state.ID
+	plan.CreateAt = state.CreateAt
+	plan.CreateBy = state.CreateBy
+	plan.UpdateAt = state.UpdateAt
+	plan.UpdateBy = state.UpdateBy
+	plan.Source = state.Source
+	plan.State = state.State
 
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
