@@ -39,6 +39,10 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 	tflog.Debug(ctx, "jsonSemanticEquality: Starting plan modification", map[string]any{
 		"stateValue": req.StateValue.ValueString(),
 		"planValue":  req.PlanValue.ValueString(),
+		"stateIsNull": req.StateValue.IsNull(),
+		"stateIsUnknown": req.StateValue.IsUnknown(),
+		"planIsNull": req.PlanValue.IsNull(),
+		"planIsUnknown": req.PlanValue.IsUnknown(),
 	})
 
 	// Do nothing if there is no state value
@@ -59,19 +63,19 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize state JSON", map[string]any{"error": err.Error()})
 		return
 	}
-
+	
 	planNormalized, err := normalizeJSON(req.PlanValue.ValueString())
 	if err != nil {
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize plan JSON", map[string]any{"error": err.Error()})
 		return
 	}
-
+	
 	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
 		"stateNormalized": stateNormalized,
 		"planNormalized":  planNormalized,
 		"areEqual":        stateNormalized == planNormalized,
 	})
-
+	
 	// If they're semantically equal, use the state value
 	if stateNormalized == planNormalized {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
@@ -562,6 +566,14 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// Instead of fetching fresh state (which causes timestamp inconsistencies),
 	// we'll use the plan data and preserve the original timestamps from state.
 	// This avoids the "inconsistent result" error while maintaining data integrity.
+
+	// Normalize the condition field to prevent drift
+	if !plan.Condition.IsNull() && !plan.Condition.IsUnknown() {
+		normalizedCondition, err := normalizeJSON(plan.Condition.ValueString())
+		if err == nil {
+			plan.Condition = types.StringValue(normalizedCondition)
+		}
+	}
 
 	// Preserve server-managed fields from current state
 	plan.ID = state.ID

@@ -144,8 +144,59 @@ func (a *Alert) SetCondition(tfCondition types.String) error {
 		return err
 	}
 
-	a.Condition = condition
+	// Normalize the condition to match API format
+	normalizedCondition := normalizeCondition(condition)
+	a.Condition = normalizedCondition
 	return nil
+}
+
+// normalizeCondition ensures the condition matches the API's expected format
+func normalizeCondition(condition map[string]interface{}) map[string]interface{} {
+	// Add default fields that the API expects
+	if condition["compositeQuery"] != nil {
+		if compositeQuery, ok := condition["compositeQuery"].(map[string]interface{}); ok {
+			if builderQueries, ok := compositeQuery["builderQueries"].(map[string]interface{}); ok {
+				for queryName, query := range builderQueries {
+					if queryMap, ok := query.(map[string]interface{}); ok {
+						// Add default fields that API adds
+						if queryMap["IsAnomaly"] == nil {
+							queryMap["IsAnomaly"] = false
+						}
+						if queryMap["QueriesUsedInFormula"] == nil {
+							queryMap["QueriesUsedInFormula"] = nil
+						}
+						if queryMap["groupBy"] == nil {
+							queryMap["groupBy"] = []interface{}{}
+						}
+						if queryName == "A" && queryMap["hidden"] == nil {
+							queryMap["hidden"] = true
+						}
+						if queryName == "F1" {
+							if queryMap["reduceTo"] == nil {
+								queryMap["reduceTo"] = ""
+							}
+							if queryMap["spaceAggregation"] == nil {
+								queryMap["spaceAggregation"] = ""
+							}
+							if queryMap["timeAggregation"] == nil {
+								queryMap["timeAggregation"] = ""
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Add root-level default fields
+	if condition["absentFor"] == nil {
+		condition["absentFor"] = 0
+	}
+	if condition["alertOnAbsent"] == nil {
+		condition["alertOnAbsent"] = false
+	}
+	
+	return condition
 }
 
 func (a *Alert) SetLabels(tfLabels types.Map, tfSeverity types.String) {
