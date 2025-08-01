@@ -37,12 +37,12 @@ func (m jsonSemanticEqualityModifier) MarkdownDescription(ctx context.Context) s
 
 func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
 	tflog.Debug(ctx, "jsonSemanticEquality: Starting plan modification", map[string]any{
-		"stateValue": req.StateValue.ValueString(),
-		"planValue":  req.PlanValue.ValueString(),
-		"stateIsNull": req.StateValue.IsNull(),
+		"stateValue":     req.StateValue.ValueString(),
+		"planValue":      req.PlanValue.ValueString(),
+		"stateIsNull":    req.StateValue.IsNull(),
 		"stateIsUnknown": req.StateValue.IsUnknown(),
-		"planIsNull": req.PlanValue.IsNull(),
-		"planIsUnknown": req.PlanValue.IsUnknown(),
+		"planIsNull":     req.PlanValue.IsNull(),
+		"planIsUnknown":  req.PlanValue.IsUnknown(),
 	})
 
 	// Do nothing if there is no state value
@@ -63,19 +63,19 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize state JSON", map[string]any{"error": err.Error()})
 		return
 	}
-	
+
 	planNormalized, err := normalizeJSON(req.PlanValue.ValueString())
 	if err != nil {
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize plan JSON", map[string]any{"error": err.Error()})
 		return
 	}
-	
+
 	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
 		"stateNormalized": stateNormalized,
 		"planNormalized":  planNormalized,
 		"areEqual":        stateNormalized == planNormalized,
 	})
-	
+
 	// If they're semantically equal, use the state value
 	if stateNormalized == planNormalized {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/attr"
@@ -139,6 +141,8 @@ func (a Alert) ToTerraform() interface{} {
 }
 
 func (a *Alert) SetCondition(tfCondition types.String) error {
+	fmt.Printf("SetCondition: Original condition: %s\n", tfCondition.ValueString())
+	
 	condition, err := structure.ExpandJsonFromString(tfCondition.ValueString())
 	if err != nil {
 		return err
@@ -146,6 +150,11 @@ func (a *Alert) SetCondition(tfCondition types.String) error {
 
 	// Normalize the condition to match API format
 	normalizedCondition := normalizeCondition(condition)
+	
+	// Debug: Print the normalized condition
+	normalizedBytes, _ := json.Marshal(normalizedCondition)
+	fmt.Printf("SetCondition: Normalized condition: %s\n", string(normalizedBytes))
+	
 	a.Condition = normalizedCondition
 	return nil
 }
@@ -187,7 +196,7 @@ func normalizeCondition(condition map[string]interface{}) map[string]interface{}
 			}
 		}
 	}
-	
+
 	// Add root-level default fields
 	if condition["absentFor"] == nil {
 		condition["absentFor"] = 0
@@ -195,7 +204,7 @@ func normalizeCondition(condition map[string]interface{}) map[string]interface{}
 	if condition["alertOnAbsent"] == nil {
 		condition["alertOnAbsent"] = false
 	}
-	
+
 	return condition
 }
 
