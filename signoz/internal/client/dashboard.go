@@ -33,10 +33,19 @@ func (c *Client) GetDashboard(ctx context.Context, dashboardUUID string) (*dashb
 		return nil, err
 	}
 
+	tflog.Debug(ctx, "GetDashboard: Raw API response", map[string]any{
+		"body":   string(body),
+		"length": len(body),
+	})
+
 	var bodyObj dashboardResponse
 	err = json.Unmarshal(body, &bodyObj)
 	if err != nil {
-		return nil, err
+		tflog.Error(ctx, "GetDashboard: Failed to unmarshal JSON response", map[string]any{
+			"error": err.Error(),
+			"body":  string(body),
+		})
+		return nil, fmt.Errorf("failed to parse dashboard response JSON: %w", err)
 	}
 
 	if bodyObj.Status != "success" || bodyObj.Error != "" {
