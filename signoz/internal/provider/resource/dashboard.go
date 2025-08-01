@@ -341,41 +341,74 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	// Update existing dashboard.
+	tflog.Debug(ctx, "Updating dashboard", map[string]any{"dashboardID": state.ID.ValueString()})
 	err = r.client.UpdateDashboard(ctx, state.ID.ValueString(), dashboardUpdate)
 	if err != nil {
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
 
-	// Instead of fetching fresh state (which causes timestamp inconsistencies),
-	// we'll use the plan data and preserve the original timestamps from state.
-	// This avoids the "inconsistent result" error while maintaining data integrity.
+	// Fetch updated dashboard to get fresh data, but preserve timestamps to avoid state inconsistency
+	tflog.Debug(ctx, "Fetching updated dashboard", map[string]any{"dashboardID": state.ID.ValueString()})
+	dashboard, err := r.client.GetDashboard(ctx, state.ID.ValueString())
+	if err != nil {
+		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+		return
+	}
 
-	// Preserve server-managed fields from current state
+	// Overwrite items with refreshed state, but preserve original timestamps
+	plan.CollapsableRowsMigrated = types.BoolValue(dashboard.Data.CollapsableRowsMigrated)
+	plan.Description = types.StringValue(dashboard.Data.Description)
+	plan.Name = types.StringValue(dashboard.Data.Name)
+	plan.Title = types.StringValue(dashboard.Data.Title)
+	plan.UploadedGrafana = types.BoolValue(dashboard.Data.UploadedGrafana)
+	plan.Version = types.StringValue(dashboard.Data.Version)
+
+	// Process complex data fields
+	tflog.Debug(ctx, "Processing dashboard Layout")
+	plan.Layout, err = dashboard.Data.LayoutToTerraform()
+	if err != nil {
+		tflog.Error(ctx, "Failed to process Layout", map[string]any{"error": err.Error()})
+		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+		return
+	}
+
+	tflog.Debug(ctx, "Processing dashboard PanelMap")
+	plan.PanelMap, err = dashboard.Data.PanelMapToTerraform()
+	if err != nil {
+		tflog.Error(ctx, "Failed to process PanelMap", map[string]any{"error": err.Error()})
+		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+		return
+	}
+
+	tflog.Debug(ctx, "Processing dashboard Variables")
+	plan.Variables, err = dashboard.Data.VariablesToTerraform()
+	if err != nil {
+		tflog.Error(ctx, "Failed to process Variables", map[string]any{"error": err.Error()})
+		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+		return
+	}
+
+	tflog.Debug(ctx, "Processing dashboard Widgets")
+	plan.Widgets, err = dashboard.Data.WidgetsToTerraform()
+	if err != nil {
+		tflog.Error(ctx, "Failed to process Widgets", map[string]any{"error": err.Error()})
+		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
+		return
+	}
+
+	tflog.Debug(ctx, "Processing dashboard Tags")
+	var diag diag.Diagnostics
+	plan.Tags, diag = dashboard.Data.TagsToTerraform()
+	resp.Diagnostics.Append(diag...)
+
+	// Preserve original timestamps to avoid state inconsistency
 	plan.ID = state.ID
 	plan.CreatedAt = state.CreatedAt
 	plan.CreatedBy = state.CreatedBy
 	plan.UpdatedAt = state.UpdatedAt
 	plan.UpdatedBy = state.UpdatedBy
 	plan.Source = state.Source
-
-	// Ensure the complex data fields are properly processed
-	// These fields need to be validated but not overwritten
-	if plan.Layout.IsNull() || plan.Layout.IsUnknown() {
-		plan.Layout = state.Layout
-	}
-	if plan.PanelMap.IsNull() || plan.PanelMap.IsUnknown() {
-		plan.PanelMap = state.PanelMap
-	}
-	if plan.Variables.IsNull() || plan.Variables.IsUnknown() {
-		plan.Variables = state.Variables
-	}
-	if plan.Widgets.IsNull() || plan.Widgets.IsUnknown() {
-		plan.Widgets = state.Widgets
-	}
-	if plan.Tags.IsNull() || plan.Tags.IsUnknown() {
-		plan.Tags = state.Tags
-	}
 
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
