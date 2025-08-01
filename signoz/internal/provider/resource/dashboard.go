@@ -296,16 +296,22 @@ func (r *dashboardResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	tflog.Debug(ctx, "Starting dashboard update")
+
 	// Retrieve values from plan.
 	var plan, state dashboardResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get plan from request", map[string]any{"errors": resp.Diagnostics.Errors()})
 		return
 	}
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		tflog.Error(ctx, "Failed to get state from request", map[string]any{"errors": resp.Diagnostics.Errors()})
 		return
 	}
+
+	tflog.Debug(ctx, "Retrieved plan and state successfully")
 
 	// Generate API request body from plan.
 	var err error
@@ -318,24 +324,37 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 		Version:                 plan.Version.ValueString(),
 	}
 
+	tflog.Debug(ctx, "Setting layout")
 	err = dashboardUpdate.SetLayout(plan.Layout)
 	if err != nil {
+		tflog.Error(ctx, "Failed to set layout", map[string]any{"error": err.Error()})
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
+
+	tflog.Debug(ctx, "Setting panel map")
 	err = dashboardUpdate.SetPanelMap(plan.PanelMap)
 	if err != nil {
+		tflog.Error(ctx, "Failed to set panel map", map[string]any{"error": err.Error()})
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
+
+	tflog.Debug(ctx, "Setting tags")
 	dashboardUpdate.SetTags(plan.Tags)
+
+	tflog.Debug(ctx, "Setting variables")
 	err = dashboardUpdate.SetVariables(plan.Variables)
 	if err != nil {
+		tflog.Error(ctx, "Failed to set variables", map[string]any{"error": err.Error()})
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
+
+	tflog.Debug(ctx, "Setting widgets")
 	err = dashboardUpdate.SetWidgets(plan.Widgets)
 	if err != nil {
+		tflog.Error(ctx, "Failed to set widgets", map[string]any{"error": err.Error()})
 		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
 		return
 	}
