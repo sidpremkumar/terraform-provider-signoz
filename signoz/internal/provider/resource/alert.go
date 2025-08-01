@@ -567,11 +567,11 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// we'll use the plan data and preserve the original timestamps from state.
 	// This avoids the "inconsistent result" error while maintaining data integrity.
 
-	// Normalize the condition field to prevent drift
-	if !plan.Condition.IsNull() && !plan.Condition.IsUnknown() {
-		normalizedCondition, err := normalizeJSON(plan.Condition.ValueString())
-		if err == nil {
-			plan.Condition = types.StringValue(normalizedCondition)
+	// Only update condition if it's actually different from current state
+	if !plan.Condition.IsNull() && !plan.Condition.IsUnknown() && !state.Condition.IsNull() && !state.Condition.IsUnknown() {
+		if plan.Condition.ValueString() == state.Condition.ValueString() {
+			// No change needed, keep the existing state value
+			plan.Condition = state.Condition
 		}
 	}
 

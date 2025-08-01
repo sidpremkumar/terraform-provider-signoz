@@ -1,8 +1,6 @@
 package model
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/attr"
@@ -85,23 +83,11 @@ func (a Alert) GetType() string {
 }
 
 func (a Alert) ConditionToTerraform() (types.String, error) {
-	// Normalize the condition to remove API-added default fields
-	normalizedCondition := removeDefaultFields(a.Condition)
-	
-	// Convert back to map[string]interface{} for structure.FlattenJsonToString
-	if normalizedMap, ok := normalizedCondition.(map[string]interface{}); ok {
-		condition, err := structure.FlattenJsonToString(normalizedMap)
-		if err != nil {
-			return types.StringValue(""), err
-		}
-		return types.StringValue(condition), nil
-	}
-	
-	// Fallback to original behavior if normalization fails
 	condition, err := structure.FlattenJsonToString(a.Condition)
 	if err != nil {
 		return types.StringValue(""), err
 	}
+
 	return types.StringValue(condition), nil
 }
 
@@ -153,123 +139,16 @@ func (a Alert) ToTerraform() interface{} {
 }
 
 func (a *Alert) SetCondition(tfCondition types.String) error {
-	fmt.Printf("SetCondition: Original condition: %s\n", tfCondition.ValueString())
-	
 	condition, err := structure.ExpandJsonFromString(tfCondition.ValueString())
 	if err != nil {
 		return err
 	}
 
-	// Normalize the condition to match API format
-	normalizedCondition := normalizeCondition(condition)
-	
-	// Debug: Print the normalized condition
-	normalizedBytes, _ := json.Marshal(normalizedCondition)
-	fmt.Printf("SetCondition: Normalized condition: %s\n", string(normalizedBytes))
-	
-	a.Condition = normalizedCondition
+	a.Condition = condition
 	return nil
 }
 
-// normalizeCondition ensures the condition matches the API's expected format
-func normalizeCondition(condition map[string]interface{}) map[string]interface{} {
-	// Add default fields that the API expects
-	if condition["compositeQuery"] != nil {
-		if compositeQuery, ok := condition["compositeQuery"].(map[string]interface{}); ok {
-			if builderQueries, ok := compositeQuery["builderQueries"].(map[string]interface{}); ok {
-				for queryName, query := range builderQueries {
-					if queryMap, ok := query.(map[string]interface{}); ok {
-						// Add default fields that API adds
-						if queryMap["IsAnomaly"] == nil {
-							queryMap["IsAnomaly"] = false
-						}
-						if queryMap["QueriesUsedInFormula"] == nil {
-							queryMap["QueriesUsedInFormula"] = nil
-						}
-						if queryMap["groupBy"] == nil {
-							queryMap["groupBy"] = []interface{}{}
-						}
-						if queryName == "A" && queryMap["hidden"] == nil {
-							queryMap["hidden"] = true
-						}
-						if queryName == "F1" {
-							if queryMap["reduceTo"] == nil {
-								queryMap["reduceTo"] = ""
-							}
-							if queryMap["spaceAggregation"] == nil {
-								queryMap["spaceAggregation"] = ""
-							}
-							if queryMap["timeAggregation"] == nil {
-								queryMap["timeAggregation"] = ""
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 
-	// Add root-level default fields
-	if condition["absentFor"] == nil {
-		condition["absentFor"] = 0
-	}
-	if condition["alertOnAbsent"] == nil {
-		condition["alertOnAbsent"] = false
-	}
-
-	return condition
-}
-
-// removeDefaultFields recursively removes API-added default fields that cause drift
-func removeDefaultFields(data interface{}) interface{} {
-	switch v := data.(type) {
-	case map[string]interface{}:
-		result := make(map[string]interface{})
-		for key, value := range v {
-			// Skip API-added default fields that cause drift
-			if isDefaultField(key, value) {
-				continue
-			}
-			result[key] = removeDefaultFields(value)
-		}
-		return result
-	case []interface{}:
-		result := make([]interface{}, len(v))
-		for i, item := range v {
-			result[i] = removeDefaultFields(item)
-		}
-		return result
-	default:
-		return v
-	}
-}
-
-// isDefaultField checks if a field is an API-added default that should be ignored
-func isDefaultField(key string, value interface{}) bool {
-	// Handle specific field types that can't be compared with ==
-	switch key {
-	case "groupBy":
-		// Check if it's an empty slice
-		if slice, ok := value.([]interface{}); ok {
-			return len(slice) == 0
-		}
-		return false
-	case "IsAnomaly":
-		return value == false
-	case "QueriesUsedInFormula":
-		return value == nil
-	case "absentFor":
-		return value == 0
-	case "alertOnAbsent":
-		return value == false
-	case "hidden":
-		return value == true
-	case "reduceTo", "spaceAggregation", "timeAggregation":
-		return value == ""
-	default:
-		return false
-	}
-}
 
 func (a *Alert) SetLabels(tfLabels types.Map, tfSeverity types.String) {
 	labels := make(map[string]string)
