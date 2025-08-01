@@ -589,41 +589,51 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 
 // areJSONsSemanticallyEqual compares two JSON strings semantically
 func areJSONsSemanticallyEqual(json1, json2 string) bool {
+	tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Starting comparison")
+	
 	var data1, data2 interface{}
-
+	
 	if err := json.Unmarshal([]byte(json1), &data1); err != nil {
+		tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Failed to unmarshal json1", map[string]any{"error": err.Error()})
 		return false
 	}
-
+	
 	if err := json.Unmarshal([]byte(json2), &data2); err != nil {
+		tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Failed to unmarshal json2", map[string]any{"error": err.Error()})
 		return false
 	}
-
+	
+	tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Successfully unmarshaled both JSONs")
+	
 	// Normalize both by removing default fields
 	normalized1 := removeDefaultFields(data1)
 	normalized2 := removeDefaultFields(data2)
-
+	
+	tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Successfully normalized both JSONs")
+	
 	// Marshal back to JSON for comparison
 	bytes1, err := json.Marshal(normalized1)
 	if err != nil {
+		tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Failed to marshal normalized1", map[string]any{"error": err.Error()})
 		return false
 	}
-
+	
 	bytes2, err := json.Marshal(normalized2)
 	if err != nil {
+		tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Failed to marshal normalized2", map[string]any{"error": err.Error()})
 		return false
 	}
-
+	
 	normalized1Str := string(bytes1)
 	normalized2Str := string(bytes2)
-
+	
 	// Debug: Log the normalized JSONs
 	tflog.Debug(context.Background(), "areJSONsSemanticallyEqual: Comparing normalized JSONs", map[string]any{
 		"normalized1": normalized1Str,
 		"normalized2": normalized2Str,
 		"areEqual":    normalized1Str == normalized2Str,
 	})
-
+	
 	return normalized1Str == normalized2Str
 }
 

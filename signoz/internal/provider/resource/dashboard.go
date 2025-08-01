@@ -278,6 +278,12 @@ func (r *dashboardResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
+	// Preserve original state values for complex JSON fields to avoid drift
+	originalWidgets := state.Widgets
+	originalLayout := state.Layout
+	originalPanelMap := state.PanelMap
+	originalVariables := state.Variables
+
 	// Overwrite items with refreshed state.
 	state.CollapsableRowsMigrated = types.BoolValue(dashboard.Data.CollapsableRowsMigrated)
 	state.CreatedAt = types.StringValue(dashboard.CreatedAt)
@@ -292,29 +298,11 @@ func (r *dashboardResource) Read(ctx context.Context, req resource.ReadRequest, 
 	state.UploadedGrafana = types.BoolValue(dashboard.Data.UploadedGrafana)
 	state.Version = types.StringValue(dashboard.Data.Version)
 
-	state.PanelMap, err = dashboard.Data.PanelMapToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationRead, SigNozDashboard)
-		return
-	}
-
-	state.Variables, err = dashboard.Data.VariablesToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationRead, SigNozDashboard)
-		return
-	}
-
-	state.Layout, err = dashboard.Data.LayoutToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationRead, SigNozDashboard)
-		return
-	}
-
-	state.Widgets, err = dashboard.Data.WidgetsToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationRead, SigNozDashboard)
-		return
-	}
+	// Preserve original complex JSON fields to avoid API reformatting drift
+	state.Widgets = originalWidgets
+	state.Layout = originalLayout
+	state.PanelMap = originalPanelMap
+	state.Variables = originalVariables
 
 	state.Tags, diag = dashboard.Data.TagsToTerraform()
 	resp.Diagnostics.Append(diag...)
