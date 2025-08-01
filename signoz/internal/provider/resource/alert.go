@@ -128,24 +128,29 @@ func removeDefaultFields(data interface{}) interface{} {
 
 // isDefaultField checks if a field is an API-added default that should be ignored
 func isDefaultField(key string, value interface{}) bool {
-	// List of API-added default fields that cause drift
-	defaultFields := map[string]interface{}{
-		"IsAnomaly":            false,
-		"QueriesUsedInFormula": nil,
-		"absentFor":            0,
-		"alertOnAbsent":        false,
-		"groupBy":              []interface{}{},
-		"hidden":               true,
-		"reduceTo":             "",
-		"spaceAggregation":     "",
-		"timeAggregation":      "",
+	// Handle specific field types that can't be compared with ==
+	switch key {
+	case "groupBy":
+		// Check if it's an empty slice
+		if slice, ok := value.([]interface{}); ok {
+			return len(slice) == 0
+		}
+		return false
+	case "IsAnomaly":
+		return value == false
+	case "QueriesUsedInFormula":
+		return value == nil
+	case "absentFor":
+		return value == 0
+	case "alertOnAbsent":
+		return value == false
+	case "hidden":
+		return value == true
+	case "reduceTo", "spaceAggregation", "timeAggregation":
+		return value == ""
+	default:
+		return false
 	}
-	
-	if expectedValue, exists := defaultFields[key]; exists {
-		return value == expectedValue
-	}
-	
-	return false
 }
 
 func jsonSemanticEquality() planmodifier.String {
