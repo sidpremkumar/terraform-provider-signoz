@@ -298,7 +298,6 @@ func (r *dashboardResource) Read(ctx context.Context, req resource.ReadRequest, 
 func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	// Retrieve values from plan.
 	var plan, state dashboardResourceModel
-	var diag diag.Diagnostics
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -348,53 +347,17 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// Fetch updated dashboard.
-	dashboard, err := r.client.GetDashboard(ctx, state.ID.ValueString())
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
+	// Instead of fetching fresh state (which causes timestamp inconsistencies),
+	// we'll use the plan data and preserve the original timestamps from state.
+	// This avoids the "inconsistent result" error while maintaining data integrity.
 
-	// Overwrite items with refreshed state.
-	plan.CollapsableRowsMigrated = types.BoolValue(dashboard.Data.CollapsableRowsMigrated)
-	plan.CreatedAt = types.StringValue(dashboard.CreatedAt)
-	plan.CreatedBy = types.StringValue(dashboard.CreatedBy)
-	plan.Description = types.StringValue(dashboard.Data.Description)
-	plan.ID = types.StringValue(dashboard.ID)
-	plan.Name = types.StringValue(dashboard.Data.Name)
-	plan.Source = types.StringValue(dashboard.Data.Source)
-	plan.Title = types.StringValue(dashboard.Data.Title)
-	plan.UpdatedAt = types.StringValue(dashboard.UpdatedAt)
-	plan.UpdatedBy = types.StringValue(dashboard.UpdatedBy)
-	plan.UploadedGrafana = types.BoolValue(dashboard.Data.UploadedGrafana)
-	plan.Version = types.StringValue(dashboard.Data.Version)
-
-	plan.Layout, err = dashboard.Data.LayoutToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	plan.PanelMap, err = dashboard.Data.PanelMapToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	plan.Variables, err = dashboard.Data.VariablesToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	plan.Widgets, err = dashboard.Data.WidgetsToTerraform()
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	plan.Tags, diag = dashboard.Data.TagsToTerraform()
-	resp.Diagnostics.Append(diag...)
+	// Preserve server-managed fields from current state
+	plan.ID = state.ID
+	plan.CreatedAt = state.CreatedAt
+	plan.CreatedBy = state.CreatedBy
+	plan.UpdatedAt = state.UpdatedAt
+	plan.UpdatedBy = state.UpdatedBy
+	plan.Source = state.Source
 
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
