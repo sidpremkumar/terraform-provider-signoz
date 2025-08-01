@@ -586,31 +586,39 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 // areJSONsSemanticallyEqual compares two JSON strings semantically
 func areJSONsSemanticallyEqual(json1, json2 string) bool {
 	var data1, data2 interface{}
-
+	
 	if err := json.Unmarshal([]byte(json1), &data1); err != nil {
 		return false
 	}
-
+	
 	if err := json.Unmarshal([]byte(json2), &data2); err != nil {
 		return false
 	}
-
+	
 	// Normalize both by removing default fields
 	normalized1 := removeDefaultFields(data1)
 	normalized2 := removeDefaultFields(data2)
-
+	
 	// Marshal back to JSON for comparison
 	bytes1, err := json.Marshal(normalized1)
 	if err != nil {
 		return false
 	}
-
+	
 	bytes2, err := json.Marshal(normalized2)
 	if err != nil {
 		return false
 	}
-
-	return string(bytes1) == string(bytes2)
+	
+	normalized1Str := string(bytes1)
+	normalized2Str := string(bytes2)
+	
+	// Debug: Print the normalized JSONs
+	fmt.Printf("Normalized JSON 1: %s\n", normalized1Str)
+	fmt.Printf("Normalized JSON 2: %s\n", normalized2Str)
+	fmt.Printf("Are equal: %t\n", normalized1Str == normalized2Str)
+	
+	return normalized1Str == normalized2Str
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
