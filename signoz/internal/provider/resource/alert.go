@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 
@@ -22,6 +23,62 @@ import (
 
 	"github.com/SigNoz/terraform-provider-signoz/signoz/internal/attr"
 )
+
+// jsonSemanticEqualityModifier implements a plan modifier that compares JSON strings semantically
+type jsonSemanticEqualityModifier struct{}
+
+func (m jsonSemanticEqualityModifier) Description(_ context.Context) string {
+	return "If the planned and state values are semantically equivalent JSON, use the state value to prevent unnecessary updates."
+}
+
+func (m jsonSemanticEqualityModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Do nothing if there is no state value
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+
+	// Do nothing if there is no planned value
+	if req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+
+	// Compare JSON semantically
+	var stateJSON, planJSON interface{}
+	
+	if err := json.Unmarshal([]byte(req.StateValue.ValueString()), &stateJSON); err != nil {
+		// If state value is not valid JSON, don't modify the plan
+		return
+	}
+	
+	if err := json.Unmarshal([]byte(req.PlanValue.ValueString()), &planJSON); err != nil {
+		// If plan value is not valid JSON, don't modify the plan
+		return
+	}
+	
+	// Marshal both back to JSON with consistent formatting
+	stateJSONBytes, err := json.Marshal(stateJSON)
+	if err != nil {
+		return
+	}
+	
+	planJSONBytes, err := json.Marshal(planJSON)
+	if err != nil {
+		return
+	}
+	
+	// If they're semantically equal, use the state value
+	if string(stateJSONBytes) == string(planJSONBytes) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+func jsonSemanticEquality() planmodifier.String {
+	return jsonSemanticEqualityModifier{}
+}
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
@@ -118,7 +175,7 @@ func (r *alertResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Required:    true,
 				Description: "Condition of the alert.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					jsonSemanticEquality(),
 				},
 			},
 			attr.Description: schema.StringAttribute{
