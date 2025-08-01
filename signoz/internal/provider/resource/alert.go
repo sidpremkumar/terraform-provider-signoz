@@ -57,27 +57,8 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 		return
 	}
 
-	// Compare JSON semantically by normalizing both to a canonical form
-	stateNormalized, err := normalizeJSON(req.StateValue.ValueString())
-	if err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize state JSON", map[string]any{"error": err.Error()})
-		return
-	}
-
-	planNormalized, err := normalizeJSON(req.PlanValue.ValueString())
-	if err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize plan JSON", map[string]any{"error": err.Error()})
-		return
-	}
-
-	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
-		"stateNormalized": stateNormalized,
-		"planNormalized":  planNormalized,
-		"areEqual":        stateNormalized == planNormalized,
-	})
-
-	// If they're semantically equal, use the state value
-	if stateNormalized == planNormalized {
+	// Compare JSONs semantically to handle formatting differences
+	if areJSONsSemanticallyEqual(req.PlanValue.ValueString(), req.StateValue.ValueString()) {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
 		resp.PlanValue = req.StateValue
 	} else {
@@ -600,33 +581,35 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 }
 
+
+
 // areJSONsSemanticallyEqual compares two JSON strings semantically
 func areJSONsSemanticallyEqual(json1, json2 string) bool {
 	var data1, data2 interface{}
-	
+
 	if err := json.Unmarshal([]byte(json1), &data1); err != nil {
 		return false
 	}
-	
+
 	if err := json.Unmarshal([]byte(json2), &data2); err != nil {
 		return false
 	}
-	
+
 	// Normalize both by removing default fields
 	normalized1 := removeDefaultFields(data1)
 	normalized2 := removeDefaultFields(data2)
-	
+
 	// Marshal back to JSON for comparison
 	bytes1, err := json.Marshal(normalized1)
 	if err != nil {
 		return false
 	}
-	
+
 	bytes2, err := json.Marshal(normalized2)
 	if err != nil {
 		return false
 	}
-	
+
 	return string(bytes1) == string(bytes2)
 }
 
