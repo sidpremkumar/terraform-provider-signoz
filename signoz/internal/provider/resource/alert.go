@@ -59,19 +59,19 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize state JSON", map[string]any{"error": err.Error()})
 		return
 	}
-	
+
 	planNormalized, err := normalizeJSON(req.PlanValue.ValueString())
 	if err != nil {
 		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize plan JSON", map[string]any{"error": err.Error()})
 		return
 	}
-	
+
 	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
 		"stateNormalized": stateNormalized,
 		"planNormalized":  planNormalized,
 		"areEqual":        stateNormalized == planNormalized,
 	})
-	
+
 	// If they're semantically equal, use the state value
 	if stateNormalized == planNormalized {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
@@ -87,16 +87,16 @@ func normalizeJSON(jsonStr string) (string, error) {
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
 		return "", err
 	}
-	
+
 	// Remove API-added default fields that cause drift
 	normalized := removeDefaultFields(data)
-	
+
 	// Marshal back to JSON with consistent formatting
 	bytes, err := json.Marshal(normalized)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(bytes), nil
 }
 
@@ -108,6 +108,8 @@ func removeDefaultFields(data interface{}) interface{} {
 		for key, value := range v {
 			// Skip API-added default fields that cause drift
 			if isDefaultField(key, value) {
+				// Log what we're removing for debugging
+				fmt.Printf("Removing default field: %s = %v\n", key, value)
 				continue
 			}
 			result[key] = removeDefaultFields(value)
@@ -132,6 +134,11 @@ func isDefaultField(key string, value interface{}) bool {
 		"QueriesUsedInFormula": nil,
 		"absentFor":            0,
 		"alertOnAbsent":        false,
+		"groupBy":              []interface{}{},
+		"hidden":               true,
+		"reduceTo":             "",
+		"spaceAggregation":     "",
+		"timeAggregation":      "",
 	}
 	
 	if expectedValue, exists := defaultFields[key]; exists {
