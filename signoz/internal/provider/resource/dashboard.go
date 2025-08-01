@@ -379,12 +379,6 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.UpdatedBy = state.UpdatedBy
 	plan.Source = state.Source
 
-	// Preserve original JSON fields to avoid state inconsistency due to API formatting changes
-	plan.Layout = state.Layout
-	plan.PanelMap = state.PanelMap
-	plan.Variables = state.Variables
-	plan.Widgets = state.Widgets
-
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
