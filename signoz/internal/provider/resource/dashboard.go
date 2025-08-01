@@ -367,29 +367,11 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// Fetch updated dashboard to get fresh data, but preserve timestamps to avoid state inconsistency
-	tflog.Debug(ctx, "Fetching updated dashboard", map[string]any{"dashboardID": state.ID.ValueString()})
-	dashboard, err := r.client.GetDashboard(ctx, state.ID.ValueString())
-	if err != nil {
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
+	// Instead of fetching fresh state (which causes inconsistencies),
+	// we'll use the plan data and preserve the original server-managed fields from state.
+	// This avoids the "inconsistent result" error while maintaining data integrity.
 
-	// Overwrite items with refreshed state, but preserve original timestamps
-	plan.CollapsableRowsMigrated = types.BoolValue(dashboard.Data.CollapsableRowsMigrated)
-	plan.Description = types.StringValue(dashboard.Data.Description)
-	plan.Name = types.StringValue(dashboard.Data.Name)
-	plan.Title = types.StringValue(dashboard.Data.Title)
-	plan.UploadedGrafana = types.BoolValue(dashboard.Data.UploadedGrafana)
-	plan.Version = types.StringValue(dashboard.Data.Version)
-
-	// Only process non-JSON fields that won't cause state inconsistency
-	tflog.Debug(ctx, "Processing dashboard Tags")
-	var diag diag.Diagnostics
-	plan.Tags, diag = dashboard.Data.TagsToTerraform()
-	resp.Diagnostics.Append(diag...)
-
-	// Preserve original timestamps to avoid state inconsistency
+	// Preserve server-managed fields from current state
 	plan.ID = state.ID
 	plan.CreatedAt = state.CreatedAt
 	plan.CreatedBy = state.CreatedBy
