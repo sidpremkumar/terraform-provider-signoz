@@ -36,13 +36,20 @@ func (m jsonSemanticEqualityModifier) MarkdownDescription(ctx context.Context) s
 }
 
 func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	tflog.Debug(ctx, "jsonSemanticEquality: Starting plan modification", map[string]any{
+		"stateValue": req.StateValue.ValueString(),
+		"planValue":  req.PlanValue.ValueString(),
+	})
+
 	// Do nothing if there is no state value
 	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		tflog.Debug(ctx, "jsonSemanticEquality: State value is null or unknown, skipping")
 		return
 	}
 
 	// Do nothing if there is no planned value
 	if req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		tflog.Debug(ctx, "jsonSemanticEquality: Plan value is null or unknown, skipping")
 		return
 	}
 
@@ -50,11 +57,13 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 	var stateJSON, planJSON interface{}
 	
 	if err := json.Unmarshal([]byte(req.StateValue.ValueString()), &stateJSON); err != nil {
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to unmarshal state JSON", map[string]any{"error": err.Error()})
 		// If state value is not valid JSON, don't modify the plan
 		return
 	}
 	
 	if err := json.Unmarshal([]byte(req.PlanValue.ValueString()), &planJSON); err != nil {
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to unmarshal plan JSON", map[string]any{"error": err.Error()})
 		// If plan value is not valid JSON, don't modify the plan
 		return
 	}
@@ -62,17 +71,31 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 	// Marshal both back to JSON with consistent formatting
 	stateJSONBytes, err := json.Marshal(stateJSON)
 	if err != nil {
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to marshal state JSON", map[string]any{"error": err.Error()})
 		return
 	}
 	
 	planJSONBytes, err := json.Marshal(planJSON)
 	if err != nil {
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to marshal plan JSON", map[string]any{"error": err.Error()})
 		return
 	}
 	
+	stateJSONStr := string(stateJSONBytes)
+	planJSONStr := string(planJSONBytes)
+	
+	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
+		"stateJSON": stateJSONStr,
+		"planJSON":  planJSONStr,
+		"areEqual":  stateJSONStr == planJSONStr,
+	})
+	
 	// If they're semantically equal, use the state value
-	if string(stateJSONBytes) == string(planJSONBytes) {
+	if stateJSONStr == planJSONStr {
+		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
 		resp.PlanValue = req.StateValue
+	} else {
+		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are different, keeping plan value")
 	}
 }
 
