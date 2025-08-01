@@ -383,39 +383,7 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.UploadedGrafana = types.BoolValue(dashboard.Data.UploadedGrafana)
 	plan.Version = types.StringValue(dashboard.Data.Version)
 
-	// Process complex data fields
-	tflog.Debug(ctx, "Processing dashboard Layout")
-	plan.Layout, err = dashboard.Data.LayoutToTerraform()
-	if err != nil {
-		tflog.Error(ctx, "Failed to process Layout", map[string]any{"error": err.Error()})
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	tflog.Debug(ctx, "Processing dashboard PanelMap")
-	plan.PanelMap, err = dashboard.Data.PanelMapToTerraform()
-	if err != nil {
-		tflog.Error(ctx, "Failed to process PanelMap", map[string]any{"error": err.Error()})
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	tflog.Debug(ctx, "Processing dashboard Variables")
-	plan.Variables, err = dashboard.Data.VariablesToTerraform()
-	if err != nil {
-		tflog.Error(ctx, "Failed to process Variables", map[string]any{"error": err.Error()})
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
-	tflog.Debug(ctx, "Processing dashboard Widgets")
-	plan.Widgets, err = dashboard.Data.WidgetsToTerraform()
-	if err != nil {
-		tflog.Error(ctx, "Failed to process Widgets", map[string]any{"error": err.Error()})
-		addErr(&resp.Diagnostics, err, operationUpdate, SigNozDashboard)
-		return
-	}
-
+	// Only process non-JSON fields that won't cause state inconsistency
 	tflog.Debug(ctx, "Processing dashboard Tags")
 	var diag diag.Diagnostics
 	plan.Tags, diag = dashboard.Data.TagsToTerraform()
@@ -428,6 +396,12 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.UpdatedAt = state.UpdatedAt
 	plan.UpdatedBy = state.UpdatedBy
 	plan.Source = state.Source
+
+	// Preserve original JSON fields to avoid state inconsistency due to API formatting changes
+	plan.Layout = state.Layout
+	plan.PanelMap = state.PanelMap
+	plan.Variables = state.Variables
+	plan.Widgets = state.Widgets
 
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
