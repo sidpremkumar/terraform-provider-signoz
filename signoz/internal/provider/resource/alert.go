@@ -58,7 +58,15 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 	}
 
 	// Compare JSONs semantically to handle formatting differences
-	if areJSONsSemanticallyEqual(req.PlanValue.ValueString(), req.StateValue.ValueString()) {
+	tflog.Debug(ctx, "jsonSemanticEquality: About to call areJSONsSemanticallyEqual")
+	
+	result := areJSONsSemanticallyEqual(req.PlanValue.ValueString(), req.StateValue.ValueString())
+	
+	tflog.Debug(ctx, "jsonSemanticEquality: areJSONsSemanticallyEqual result", map[string]any{
+		"result": result,
+	})
+	
+	if result {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
 		resp.PlanValue = req.StateValue
 	} else {
