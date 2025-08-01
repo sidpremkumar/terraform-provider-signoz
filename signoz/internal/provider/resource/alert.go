@@ -577,12 +577,11 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// Only update condition if the user explicitly changed it in their config
 	// This prevents drift from API formatting differences
 	if !state.Condition.IsNull() && !state.Condition.IsUnknown() {
-		// If the plan condition is the same as state, keep the state value
-		// If the plan condition is different, it means the user changed it
-		if plan.Condition.ValueString() == state.Condition.ValueString() {
+		// Compare JSON semantically to handle formatting differences
+		if areJSONsSemanticallyEqual(plan.Condition.ValueString(), state.Condition.ValueString()) {
 			plan.Condition = state.Condition
 		}
-		// If they're different, let the plan value go through (user made a change)
+		// If they're semantically different, let the plan value go through (user made a change)
 	}
 
 	// Preserve server-managed fields from current state
@@ -599,6 +598,36 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+}
+
+// areJSONsSemanticallyEqual compares two JSON strings semantically
+func areJSONsSemanticallyEqual(json1, json2 string) bool {
+	var data1, data2 interface{}
+	
+	if err := json.Unmarshal([]byte(json1), &data1); err != nil {
+		return false
+	}
+	
+	if err := json.Unmarshal([]byte(json2), &data2); err != nil {
+		return false
+	}
+	
+	// Normalize both by removing default fields
+	normalized1 := removeDefaultFields(data1)
+	normalized2 := removeDefaultFields(data2)
+	
+	// Marshal back to JSON for comparison
+	bytes1, err := json.Marshal(normalized1)
+	if err != nil {
+		return false
+	}
+	
+	bytes2, err := json.Marshal(normalized2)
+	if err != nil {
+		return false
+	}
+	
+	return string(bytes1) == string(bytes2)
 }
 
 // Delete deletes the resource and removes the Terraform state on success.
