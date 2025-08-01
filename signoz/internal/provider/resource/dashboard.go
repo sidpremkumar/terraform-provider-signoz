@@ -359,6 +359,24 @@ func (r *dashboardResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.UpdatedBy = state.UpdatedBy
 	plan.Source = state.Source
 
+	// Ensure the complex data fields are properly processed
+	// These fields need to be validated but not overwritten
+	if plan.Layout.IsNull() || plan.Layout.IsUnknown() {
+		plan.Layout = state.Layout
+	}
+	if plan.PanelMap.IsNull() || plan.PanelMap.IsUnknown() {
+		plan.PanelMap = state.PanelMap
+	}
+	if plan.Variables.IsNull() || plan.Variables.IsUnknown() {
+		plan.Variables = state.Variables
+	}
+	if plan.Widgets.IsNull() || plan.Widgets.IsUnknown() {
+		plan.Widgets = state.Widgets
+	}
+	if plan.Tags.IsNull() || plan.Tags.IsUnknown() {
+		plan.Tags = state.Tags
+	}
+
 	// Set refreshed state.
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
