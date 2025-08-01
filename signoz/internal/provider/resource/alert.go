@@ -567,12 +567,22 @@ func (r *alertResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	// we'll use the plan data and preserve the original timestamps from state.
 	// This avoids the "inconsistent result" error while maintaining data integrity.
 
-	// Only update condition if it's actually different from current state
-	if !plan.Condition.IsNull() && !plan.Condition.IsUnknown() && !state.Condition.IsNull() && !state.Condition.IsUnknown() {
+	// Debug: Log what we're comparing
+	tflog.Debug(ctx, "Update: Comparing condition values", map[string]any{
+		"planCondition":  plan.Condition.ValueString(),
+		"stateCondition": state.Condition.ValueString(),
+		"areEqual":       plan.Condition.ValueString() == state.Condition.ValueString(),
+	})
+
+	// Only update condition if the user explicitly changed it in their config
+	// This prevents drift from API formatting differences
+	if !state.Condition.IsNull() && !state.Condition.IsUnknown() {
+		// If the plan condition is the same as state, keep the state value
+		// If the plan condition is different, it means the user changed it
 		if plan.Condition.ValueString() == state.Condition.ValueString() {
-			// No change needed, keep the existing state value
 			plan.Condition = state.Condition
 		}
+		// If they're different, let the plan value go through (user made a change)
 	}
 
 	// Preserve server-managed fields from current state

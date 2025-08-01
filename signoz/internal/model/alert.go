@@ -148,8 +148,6 @@ func (a *Alert) SetCondition(tfCondition types.String) error {
 	return nil
 }
 
-
-
 func (a *Alert) SetLabels(tfLabels types.Map, tfSeverity types.String) {
 	labels := make(map[string]string)
 
