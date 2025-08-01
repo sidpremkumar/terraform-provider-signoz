@@ -92,9 +92,19 @@ func (d Dashboard) WidgetsToTerraform() (types.String, error) {
 }
 
 func (d *Dashboard) SetVariables(tfVariables types.String) error {
-	variables, err := structure.ExpandJsonFromString(tfVariables.ValueString())
+	variablesStr := tfVariables.ValueString()
+	if variablesStr == "" {
+		d.Variables = make(map[string]interface{})
+		return nil
+	}
+
+	// Debug log the variables string we're trying to parse
+	fmt.Printf("DEBUG: SetVariables attempting to parse: %q\n", variablesStr)
+
+	variables, err := structure.ExpandJsonFromString(variablesStr)
 	if err != nil {
-		return err
+		fmt.Printf("DEBUG: SetVariables parse error: %v\n", err)
+		return fmt.Errorf("failed to parse variables JSON: %w", err)
 	}
 	d.Variables = variables
 	return nil
