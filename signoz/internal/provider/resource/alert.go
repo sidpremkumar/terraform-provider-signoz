@@ -53,50 +53,92 @@ func (m jsonSemanticEqualityModifier) PlanModifyString(ctx context.Context, req 
 		return
 	}
 
-	// Compare JSON semantically
-	var stateJSON, planJSON interface{}
-	
-	if err := json.Unmarshal([]byte(req.StateValue.ValueString()), &stateJSON); err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to unmarshal state JSON", map[string]any{"error": err.Error()})
-		// If state value is not valid JSON, don't modify the plan
-		return
-	}
-	
-	if err := json.Unmarshal([]byte(req.PlanValue.ValueString()), &planJSON); err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to unmarshal plan JSON", map[string]any{"error": err.Error()})
-		// If plan value is not valid JSON, don't modify the plan
-		return
-	}
-	
-	// Marshal both back to JSON with consistent formatting
-	stateJSONBytes, err := json.Marshal(stateJSON)
+	// Compare JSON semantically by normalizing both to a canonical form
+	stateNormalized, err := normalizeJSON(req.StateValue.ValueString())
 	if err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to marshal state JSON", map[string]any{"error": err.Error()})
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize state JSON", map[string]any{"error": err.Error()})
 		return
 	}
 	
-	planJSONBytes, err := json.Marshal(planJSON)
+	planNormalized, err := normalizeJSON(req.PlanValue.ValueString())
 	if err != nil {
-		tflog.Debug(ctx, "jsonSemanticEquality: Failed to marshal plan JSON", map[string]any{"error": err.Error()})
+		tflog.Debug(ctx, "jsonSemanticEquality: Failed to normalize plan JSON", map[string]any{"error": err.Error()})
 		return
 	}
-	
-	stateJSONStr := string(stateJSONBytes)
-	planJSONStr := string(planJSONBytes)
 	
 	tflog.Debug(ctx, "jsonSemanticEquality: Comparing normalized JSON", map[string]any{
-		"stateJSON": stateJSONStr,
-		"planJSON":  planJSONStr,
-		"areEqual":  stateJSONStr == planJSONStr,
+		"stateNormalized": stateNormalized,
+		"planNormalized":  planNormalized,
+		"areEqual":        stateNormalized == planNormalized,
 	})
 	
 	// If they're semantically equal, use the state value
-	if stateJSONStr == planJSONStr {
+	if stateNormalized == planNormalized {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are semantically equal, using state value")
 		resp.PlanValue = req.StateValue
 	} else {
 		tflog.Debug(ctx, "jsonSemanticEquality: JSONs are different, keeping plan value")
 	}
+}
+
+// normalizeJSON normalizes JSON by removing API-added default fields and ensuring consistent formatting
+func normalizeJSON(jsonStr string) (string, error) {
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return "", err
+	}
+	
+	// Remove API-added default fields that cause drift
+	normalized := removeDefaultFields(data)
+	
+	// Marshal back to JSON with consistent formatting
+	bytes, err := json.Marshal(normalized)
+	if err != nil {
+		return "", err
+	}
+	
+	return string(bytes), nil
+}
+
+// removeDefaultFields recursively removes API-added default fields that cause drift
+func removeDefaultFields(data interface{}) interface{} {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{})
+		for key, value := range v {
+			// Skip API-added default fields that cause drift
+			if isDefaultField(key, value) {
+				continue
+			}
+			result[key] = removeDefaultFields(value)
+		}
+		return result
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = removeDefaultFields(item)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
+// isDefaultField checks if a field is an API-added default that should be ignored
+func isDefaultField(key string, value interface{}) bool {
+	// List of API-added default fields that cause drift
+	defaultFields := map[string]interface{}{
+		"IsAnomaly":            false,
+		"QueriesUsedInFormula": nil,
+		"absentFor":            0,
+		"alertOnAbsent":        false,
+	}
+	
+	if expectedValue, exists := defaultFields[key]; exists {
+		return value == expectedValue
+	}
+	
+	return false
 }
 
 func jsonSemanticEquality() planmodifier.String {
